@@ -26,8 +26,6 @@
   const newSoundBtn = document.getElementById("newSoundBtn");
   const importInput = document.getElementById("importInput");
   const uploadInput = document.getElementById("uploadInput");
-  const authBtn = document.getElementById("authBtn");
-  const authStatus = document.getElementById("authStatus");
   const cloudBadge = document.getElementById("cloudBadge");
 
   const SHARED_BOARD_URL = "board.json";
@@ -65,9 +63,15 @@
   let audioCtx = null;
   /** @type {Map<string, AudioBuffer>} */
   const bufferCache = new Map();
-  /** One live source per pad — retrigger stops the previous play */
-  /** @type {Map<string, AudioBufferSourceNode>} */
-  const activeSources = new Map();
+  /**
+   * Active voices per pad. Retrigger stops every voice for that pad
+   * (gain kill + source.stop) so clips never stack.
+   * @type {Map<string, { source: AudioBufferSourceNode, gain: GainNode }[]>}
+   */
+  const activeVoices = new Map();
+  /** Generation token so in-flight decode can't start a stale layered play */
+  /** @type {Map<string, number>} */
+  const playGeneration = new Map();
 
   /** Pad currently being edited in the modal */
   let editingPadId = null;
@@ -215,8 +219,6 @@
       cloudBadge.textContent = configured ? "· team cloud" : "· local";
       cloudBadge.classList.toggle("is-cloud", configured);
     }
-    if (authStatus) authStatus.hidden = true;
-    if (authBtn) authBtn.hidden = true;
   }
 
   async function requireAuth() {
@@ -370,56 +372,85 @@
     pad.duration = buffer.duration;
   }
 
-  function stopPadSource(padId) {
-    const prev = activeSources.get(padId);
-    if (!prev) return;
-    try {
-      prev.onended = null;
-      prev.stop(0);
-    } catch { /* already stopped */ }
-    try {
-      prev.disconnect();
-    } catch { /* ignore */ }
-    activeSources.delete(padId);
+  function clearPlayingVisual(padId) {
     const el = boardEl.querySelector(`[data-pad-id="${padId}"]`);
-    if (el) {
-      el.classList.remove("playing");
-      clearTimeout(el._playT);
+    if (!el) return;
+    el.classList.remove("playing");
+    clearTimeout(el._playT);
+  }
+
+  function stopPadVoices(padId) {
+    const voices = activeVoices.get(padId);
+    if (!voices || !voices.length) {
+      clearPlayingVisual(padId);
+      return;
     }
+    const ctx = audioCtx;
+    for (const voice of voices) {
+      try {
+        voice.source.onended = null;
+      } catch { /* ignore */ }
+      // Mute instantly (more reliable than stop alone across browsers)
+      try {
+        if (ctx) {
+          voice.gain.gain.cancelScheduledValues(ctx.currentTime);
+          voice.gain.gain.setValueAtTime(0, ctx.currentTime);
+        } else {
+          voice.gain.gain.value = 0;
+        }
+      } catch { /* ignore */ }
+      try {
+        voice.source.stop();
+      } catch { /* already stopped */ }
+      try {
+        voice.source.disconnect();
+        voice.gain.disconnect();
+      } catch { /* ignore */ }
+    }
+    activeVoices.delete(padId);
+    clearPlayingVisual(padId);
   }
 
   function stopAllPlayback() {
-    for (const id of [...activeSources.keys()]) stopPadSource(id);
+    for (const id of [...activeVoices.keys()]) stopPadVoices(id);
   }
 
-  function playPad(pad) {
-    if (!pad || !pad.blob) return;
-    const ctx = ensureAudioCtx();
-    const buffer = bufferCache.get(pad.id);
-    if (!buffer) {
-      decodePad(pad)
-        .then(() => playPad(pad))
-        .catch(() => toast("Could not play this sound"));
-      return;
-    }
+  function startPadVoice(pad, buffer, generation) {
+    if (playGeneration.get(pad.id) !== generation) return;
 
-    // Second press (or rapid re-trigger): restart instead of stacking
-    stopPadSource(pad.id);
+    const ctx = ensureAudioCtx();
+    // Kill anything still audible for this pad, then start fresh
+    stopPadVoices(pad.id);
+    if (playGeneration.get(pad.id) !== generation) return;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    gain.connect(ctx.destination);
 
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.connect(gain);
+
+    const voice = { source, gain };
+    const list = activeVoices.get(pad.id) || [];
+    list.push(voice);
+    activeVoices.set(pad.id, list);
+
     source.onended = () => {
-      if (activeSources.get(pad.id) === source) {
-        activeSources.delete(pad.id);
-        const el = boardEl.querySelector(`[data-pad-id="${pad.id}"]`);
-        if (el) {
-          el.classList.remove("playing");
-          clearTimeout(el._playT);
-        }
+      const current = activeVoices.get(pad.id);
+      if (!current) return;
+      const next = current.filter((v) => v !== voice);
+      if (next.length) activeVoices.set(pad.id, next);
+      else {
+        activeVoices.delete(pad.id);
+        clearPlayingVisual(pad.id);
       }
+      try {
+        source.disconnect();
+        gain.disconnect();
+      } catch { /* ignore */ }
     };
-    activeSources.set(pad.id, source);
+
     source.start(0);
 
     const el = boardEl.querySelector(`[data-pad-id="${pad.id}"]`);
@@ -430,9 +461,37 @@
       clearTimeout(el._playT);
       const ms = Math.max(120, (pad.duration || buffer.duration || 1) * 1000 + 50);
       el._playT = setTimeout(() => {
-        if (activeSources.get(pad.id) === source) el.classList.remove("playing");
+        if (playGeneration.get(pad.id) === generation) el.classList.remove("playing");
       }, ms);
     }
+  }
+
+  function playPad(pad) {
+    if (!pad || !pad.blob) return;
+
+    const generation = (playGeneration.get(pad.id) || 0) + 1;
+    playGeneration.set(pad.id, generation);
+
+    // Immediate cut on re-press (even while decode is still running)
+    stopPadVoices(pad.id);
+
+    const cached = bufferCache.get(pad.id);
+    if (cached) {
+      startPadVoice(pad, cached, generation);
+      return;
+    }
+
+    decodePad(pad)
+      .then(() => {
+        const buffer = bufferCache.get(pad.id);
+        if (!buffer) return;
+        startPadVoice(pad, buffer, generation);
+      })
+      .catch(() => {
+        if (playGeneration.get(pad.id) === generation) {
+          toast("Could not play this sound");
+        }
+      });
   }
 
   // ---------------------------------------------------------------------------

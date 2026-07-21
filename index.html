@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Soundboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===== Top bar ===== -->
+  <header class="topbar">
+    <h1 class="topbar__title">Soundboard</h1>
+    <div class="topbar__actions">
+      <button id="addBtn" class="btn" title="Add a new pad">+ Add pad</button>
+      <button id="exportBtn" class="btn" title="Export the board to a .json file">Export board</button>
+      <button id="importBtn" class="btn" title="Import a board from a .json file">Import board</button>
+      <label class="toggle" title="Enable keyboard shortcuts">
+        <input type="checkbox" id="shortcutsToggle" checked />
+        <span>Keyboard shortcuts</span>
+      </label>
+      <!-- Hidden file input used by the Import button -->
+      <input type="file" id="importInput" accept="application/json,.json" hidden />
+    </div>
+  </header>
+
+  <!-- ===== Pad grid ===== -->
+  <main>
+    <div id="grid" class="grid" aria-label="Soundboard pads"></div>
+    <p class="hint">
+      Tip: <strong>drag &amp; drop</strong> an audio file onto a pad, or use the pad menu to record.
+      <strong>Double-click</strong> a label to rename. <strong>Right-click</strong> a pad to clear it.
+    </p>
+  </main>
+
+  <!-- ===== Recording modal ===== -->
+  <div id="recordModal" class="modal" hidden>
+    <div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="recordTitle">
+      <h2 id="recordTitle">Record sound</h2>
+      <p class="modal__pad-name" id="recordPadName"></p>
+
+      <div class="record">
+        <div class="record__status" id="recordStatus">Ready</div>
+        <div class="record__timer" id="recordTimer">0.0s</div>
+
+        <div class="record__controls">
+          <button id="recStartBtn" class="btn btn--danger">● Record</button>
+          <button id="recStopBtn" class="btn" disabled>■ Stop</button>
+        </div>
+
+        <!-- Playback preview of the just-recorded clip -->
+        <audio id="recPreview" class="record__preview" controls hidden></audio>
+
+        <div class="record__save-row">
+          <button id="recSaveBtn" class="btn btn--primary" disabled>Save to pad</button>
+          <button id="recCancelBtn" class="btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Pad context menu ===== -->
+  <div id="padMenu" class="menu" hidden>
+    <button data-action="record" class="menu__item">Record…</button>
+    <button data-action="upload" class="menu__item">Upload file…</button>
+    <button data-action="rename" class="menu__item">Rename</button>
+    <button data-action="shortcut" class="menu__item">Set shortcut</button>
+    <button data-action="clear" class="menu__item menu__item--danger">Clear sound</button>
+    <button data-action="delete" class="menu__item menu__item--danger">Delete pad</button>
+  </div>
+
+  <!-- Hidden per-pad file input reused for uploads -->
+  <input type="file" id="uploadInput" accept="audio/*" hidden />
+
+  <script src="app.js"></script>
+</body>
+</html>

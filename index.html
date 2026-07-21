@@ -1,76 +1,146 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Soundboard</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board — Soundboard</title>
+  <link rel="icon" href="favicon.ico" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ===== Top bar ===== -->
-  <header class="topbar">
-    <h1 class="topbar__title">Soundboard</h1>
-    <div class="topbar__actions">
-      <button id="addBtn" class="btn" title="Add a new pad">+ Add pad</button>
-      <button id="exportBtn" class="btn" title="Export the board to a .json file">Export board</button>
-      <button id="importBtn" class="btn" title="Import a board from a .json file">Import board</button>
-      <label class="toggle" title="Enable keyboard shortcuts">
-        <input type="checkbox" id="shortcutsToggle" checked />
-        <span>Keyboard shortcuts</span>
-      </label>
-      <!-- Hidden file input used by the Import button -->
-      <input type="file" id="importInput" accept="application/json,.json" hidden />
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">🔊</div>
+    <span>Board</span>
+    <small>· soundboard</small>
+  </div>
+  <div class="top-actions">
+    <button type="button" class="toggle on" id="kbdToggle" title="Keyboard shortcuts">
+      <span class="switch"></span>
+      <span>Shortcuts</span>
+    </button>
+    <button type="button" class="btn ghost" id="importBtn" title="Import board">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import
+    </button>
+    <button type="button" class="btn ghost" id="exportBtn" title="Export board">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+    <button type="button" class="btn primary" id="newSoundBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New sound
+    </button>
+  </div>
+</header>
+
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1>My Board</h1>
+      <p><span id="boardCount" class="board-count">12 slots</span> · Click any pad to fire. Tap the shortcut key to trigger it.</p>
     </div>
-  </header>
+    <div class="legend">
+      <span class="lg-empty"><i></i>Empty</span>
+      <span class="lg-filled"><i></i>Filled</span>
+      <span class="lg-playing"><i></i>Playing</span>
+    </div>
+  </div>
 
-  <!-- ===== Pad grid ===== -->
-  <main>
-    <div id="grid" class="grid" aria-label="Soundboard pads"></div>
-    <p class="hint">
-      Tip: <strong>drag &amp; drop</strong> an audio file onto a pad, or use the pad menu to record.
-      <strong>Double-click</strong> a label to rename. <strong>Right-click</strong> a pad to clear it.
-    </p>
-  </main>
+  <div class="board" id="board" aria-label="Soundboard pads"></div>
+</main>
 
-  <!-- ===== Recording modal ===== -->
-  <div id="recordModal" class="modal" hidden>
-    <div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="recordTitle">
-      <h2 id="recordTitle">Record sound</h2>
-      <p class="modal__pad-name" id="recordPadName"></p>
+<!-- Add / edit sound modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h3 id="modalTitle">Add a sound</h3>
+      <button type="button" class="close" id="modalClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
 
-      <div class="record">
-        <div class="record__status" id="recordStatus">Ready</div>
-        <div class="record__timer" id="recordTimer">0.0s</div>
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="record">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        Record
+      </button>
+      <button type="button" class="tab" data-tab="upload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload
+      </button>
+    </div>
 
-        <div class="record__controls">
-          <button id="recStartBtn" class="btn btn--danger">● Record</button>
-          <button id="recStopBtn" class="btn" disabled>■ Stop</button>
+    <!-- RECORD -->
+    <div class="tab-panel active" data-panel="record">
+      <div class="record-stage">
+        <button type="button" class="rec-btn" id="recBtn" aria-label="Start or stop recording">
+          <div class="inner"></div>
+        </button>
+        <div class="level-meter" id="levelMeter"></div>
+        <div class="timer"><span class="rec-dot" id="recDot"></span><span id="recTime">00:00</span></div>
+      </div>
+
+      <div class="preview-real" id="recPreviewWrap">
+        <audio id="recPreview" class="preview" controls></audio>
+      </div>
+
+      <div class="field-row">
+        <div class="field" style="flex:1">
+          <label for="recName">Name</label>
+          <input type="text" id="recName" placeholder="e.g. Airhorn" maxlength="48" />
         </div>
-
-        <!-- Playback preview of the just-recorded clip -->
-        <audio id="recPreview" class="record__preview" controls hidden></audio>
-
-        <div class="record__save-row">
-          <button id="recSaveBtn" class="btn btn--primary" disabled>Save to pad</button>
-          <button id="recCancelBtn" class="btn">Cancel</button>
+        <div class="field">
+          <label>Shortcut</label>
+          <button type="button" class="kbd-input" id="recShortcut" title="Click then press a key">—</button>
         </div>
       </div>
     </div>
+
+    <!-- UPLOAD -->
+    <div class="tab-panel" data-panel="upload">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload audio file">
+        <div class="up-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <h4>Drop an MP3 or WAV here</h4>
+        <p>or <span class="browse">click to browse</span> · max ~10s clips work best</p>
+      </div>
+
+      <div class="file-card" id="fileCard">
+        <div class="fi" id="fileExt">WAV</div>
+        <div>
+          <div class="fname" id="fileName">—</div>
+          <div class="fmeta" id="fileMeta">—</div>
+        </div>
+        <button type="button" class="fx" id="fileClear" aria-label="Remove file">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="field-row">
+        <div class="field" style="flex:1">
+          <label for="upName">Name</label>
+          <input type="text" id="upName" placeholder="e.g. Airhorn" maxlength="48" />
+        </div>
+        <div class="field">
+          <label>Shortcut</label>
+          <button type="button" class="kbd-input" id="upShortcut" title="Click then press a key">—</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button type="button" class="btn ghost" id="modalCancel">Cancel</button>
+      <button type="button" class="btn primary" id="modalSave" disabled>Save to board</button>
+    </div>
   </div>
+</div>
 
-  <!-- ===== Pad context menu ===== -->
-  <div id="padMenu" class="menu" hidden>
-    <button data-action="record" class="menu__item">Record…</button>
-    <button data-action="upload" class="menu__item">Upload file…</button>
-    <button data-action="rename" class="menu__item">Rename</button>
-    <button data-action="shortcut" class="menu__item">Set shortcut</button>
-    <button data-action="clear" class="menu__item menu__item--danger">Clear sound</button>
-    <button data-action="delete" class="menu__item menu__item--danger">Delete pad</button>
-  </div>
+<input type="file" id="importInput" accept="application/json,.json" class="sr-only" />
+<input type="file" id="uploadInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm" class="sr-only" />
 
-  <!-- Hidden per-pad file input reused for uploads -->
-  <input type="file" id="uploadInput" accept="audio/*" hidden />
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

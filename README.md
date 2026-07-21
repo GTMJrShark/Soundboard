@@ -1,74 +1,59 @@
-# Soundboard
+# Board — Soundboard
 
-A lightweight, offline-first soundboard inspired by the TV Total **Nippelboard**: a grid of pads that instantly play short sound clips. Record from your mic, upload MP3/WAV files, trigger sounds with the keyboard, and export/import the whole board as a single JSON file.
+A lightweight, offline-first soundboard inspired by the TV Total **Nippelboard**. UI based on the **Sound Spark** design: colorful pads, record/upload modal, keyboard shortcuts, export/import.
 
-Built with plain HTML, CSS, and vanilla JavaScript — no build step, no frameworks, no external dependencies.
+Plain HTML, CSS, and vanilla JavaScript — no build step, no frameworks.
 
 ## Features
 
-- **12 pads by default** (add more with “+ Add pad”)
-- **Record** via the microphone (`MediaRecorder`, max ~10 seconds) with a live timer, visible recording state, and playback preview before saving
-- **Upload** audio (MP3, WAV, etc.) via drag-and-drop onto a pad or the pad menu’s file picker
-- **Instant playback** with the Web Audio API — overlapping sounds allowed (mash several pads quickly)
-- **Editable labels** — double-click a pad’s name to rename
-- **Clear / remove** — right-click a pad for the menu, or click the × on a pad with a sound
-- **Keyboard shortcuts** — default layout uses `1–4`, `Q–R`, `A–F`; customize per pad from the menu
-- **Persistence** — sounds and labels stored in **IndexedDB** (survives reload)
-- **Export / Import board** — download or restore a `.json` file with base64-encoded audio
+- **12 pads by default** (grows when you add more via **New sound**)
+- **Record** from the mic (max ~10s) with live level meter and preview before save
+- **Upload** MP3/WAV via the modal dropzone, or drag a file onto any pad
+- **Instant overlapping playback** via the Web Audio API
+- **Editable labels** — double-click a name, or use the ⋯ menu → Rename
+- **Clear / replace** from the pad menu or right-click
+- **Keyboard shortcuts** — default `Q–I` / `A–F`; customize per pad
+- **IndexedDB** persistence (survives reload)
+- **Export / Import** a single `.json` board (base64 audio)
 
 ## How to use
 
 | Action | How |
 | --- | --- |
-| Play | Click a pad that has a sound, or press its keyboard shortcut |
-| Record | Right-click (or click an empty pad) → **Record…** → ● Record → ■ Stop → listen → **Save to pad** |
-| Upload | Drag an audio file onto a pad, or menu → **Upload file…** |
-| Rename | Double-click the label, or menu → **Rename** |
-| Shortcut | Menu → **Set shortcut** → press a key (Backspace clears) |
-| Clear sound | Click × on the pad, or menu → **Clear sound**, or right-click flow |
-| Delete pad | Menu → **Delete pad** |
-| Export | **Export board** — downloads a `.json` backup |
-| Import | **Import board** — replaces the current board from a `.json` file |
-
-Toggle **Keyboard shortcuts** in the top bar if you want to type without triggering pads.
+| Play | Click a filled pad, or press its shortcut |
+| Add / record | Click an empty pad or **New sound** → Record → tap the red button → preview → **Save to board** |
+| Upload | Modal → **Upload** tab, or drag a file onto a pad |
+| Rename | Double-click the label, or ⋯ → Rename |
+| Shortcut | ⋯ → Reassign shortcut, or set it in the modal |
+| Clear | ⋯ → Clear sound |
+| Export / Import | Top bar buttons |
 
 ## Run locally
 
-No install required:
+Open `index.html` in a browser.
 
-1. Open `index.html` in your browser (double-click it, or File → Open).
-2. Start assigning sounds to pads.
-
-**Microphone note:** Recording needs a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts). Opening the file directly (`file://`) works for playback, upload, and IndexedDB in most browsers, but **recording may be blocked**. If the mic doesn’t work, serve the folder over localhost:
+Recording needs a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts). If the mic is blocked on `file://`, serve locally:
 
 ```bash
-# From this directory — any static server works, e.g.:
 python3 -m http.server 8080
 ```
 
 Then open [http://localhost:8080](http://localhost:8080).
 
-## Deploy free on GitHub Pages
+## Deploy on GitHub Pages
 
-1. Create a new GitHub repository and push this project (the folder that contains `index.html`).
-2. On GitHub: **Settings → Pages**.
-3. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
-4. Choose the `main` branch and the folder `/ (root)`, then save.
-5. After a minute or two, your board is live at  
-   `https://<your-username>.github.io/<repo-name>/`.
+1. Push this folder to a GitHub repo (`main` branch).
+2. **Settings → Pages → Deploy from a branch → `main` / root**.
+3. Live at `https://<user>.github.io/<repo>/`.
 
-GitHub Pages is HTTPS, so microphone recording works there. Boards are stored **in each visitor’s browser** (IndexedDB), not on the server — use **Export board** to back up or share a layout.
+Boards live in each visitor’s browser (IndexedDB). Use **Export** to back up or share.
 
 ## Project structure
 
 ```
-soundboard/
-  index.html   # UI shell
-  style.css    # Layout and theme
-  app.js       # Pads, audio, IndexedDB, export/import
+  index.html
+  style.css
+  app.js
+  favicon.ico
   README.md
 ```
-
-## Browser support
-
-Modern Chromium, Firefox, and Safari. Relies on IndexedDB, Web Audio API, `MediaRecorder`, and `getUserMedia`.

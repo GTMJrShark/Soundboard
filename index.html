@@ -13,18 +13,24 @@
   <div class="brand">
     <div class="logo">🔊</div>
     <span>Board</span>
-    <small>· soundboard</small>
+    <small id="cloudBadge" class="cloud-badge">· local</small>
   </div>
   <div class="top-actions">
+    <span id="authStatus" class="auth-status" hidden></span>
+    <button type="button" class="btn ghost" id="authBtn" hidden>Sign in</button>
     <button type="button" class="toggle on" id="kbdToggle" title="Keyboard shortcuts">
       <span class="switch"></span>
       <span>Shortcuts</span>
+    </button>
+    <button type="button" class="btn ghost" id="syncBtn" title="Reload shared board from Supabase / site">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Sync
     </button>
     <button type="button" class="btn ghost" id="importBtn" title="Import board">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Import
     </button>
-    <button type="button" class="btn ghost" id="exportBtn" title="Export board">
+    <button type="button" class="btn ghost" id="exportBtn" title="Export board.json backup">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export
     </button>
@@ -39,7 +45,7 @@
   <div class="page-head">
     <div>
       <h1>My Board</h1>
-      <p><span id="boardCount" class="board-count">12 slots</span> · Click any pad to fire. Tap the shortcut key to trigger it.</p>
+      <p><span id="boardCount" class="board-count">12 slots</span> · Click any pad to fire. Anyone with the link can upload for the team.</p>
     </div>
     <div class="legend">
       <span class="lg-empty"><i></i>Empty</span>
@@ -141,6 +147,9 @@
 <input type="file" id="importInput" accept="application/json,.json" class="sr-only" />
 <input type="file" id="uploadInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm" class="sr-only" />
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="supabase-sync.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

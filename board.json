@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-21T00:00:00.000Z",
+  "pads": [
+    { "id": "pad_01", "label": "Pad 1", "shortcut": "q", "color": 1, "file": null },
+    { "id": "pad_02", "label": "Pad 2", "shortcut": "w", "color": 2, "file": null },
+    { "id": "pad_03", "label": "Pad 3", "shortcut": "e", "color": 3, "file": null },
+    { "id": "pad_04", "label": "Pad 4", "shortcut": "r", "color": 4, "file": null },
+    { "id": "pad_05", "label": "Pad 5", "shortcut": "t", "color": 5, "file": null },
+    { "id": "pad_06", "label": "Pad 6", "shortcut": "y", "color": 6, "file": null },
+    { "id": "pad_07", "label": "Pad 7", "shortcut": "u", "color": 7, "file": null },
+    { "id": "pad_08", "label": "Pad 8", "shortcut": "i", "color": 8, "file": null },
+    { "id": "pad_09", "label": "Pad 9", "shortcut": "a", "color": 1, "file": null },
+    { "id": "pad_10", "label": "Pad 10", "shortcut": "s", "color": 2, "file": null },
+    { "id": "pad_11", "label": "Pad 11", "shortcut": "d", "color": 3, "file": null },
+    { "id": "pad_12", "label": "Pad 12", "shortcut": "f", "color": 4, "file": null }
+  ]
+}

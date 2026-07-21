@@ -19,11 +19,20 @@
   const boardEl = document.getElementById("board");
   const boardCountEl = document.getElementById("boardCount");
   const kbdToggle = document.getElementById("kbdToggle");
+  const syncBtn = document.getElementById("syncBtn");
   const importBtn = document.getElementById("importBtn");
   const exportBtn = document.getElementById("exportBtn");
   const newSoundBtn = document.getElementById("newSoundBtn");
   const importInput = document.getElementById("importInput");
   const uploadInput = document.getElementById("uploadInput");
+  const authBtn = document.getElementById("authBtn");
+  const authStatus = document.getElementById("authStatus");
+  const cloudBadge = document.getElementById("cloudBadge");
+
+  const SHARED_BOARD_URL = "board.json";
+  const Cloud = () => window.SoundboardCloud;
+  let cloudMode = false;
+  let suppressRealtime = false;
 
   const modal = document.getElementById("modal");
   const modalClose = document.getElementById("modalClose");
@@ -49,7 +58,7 @@
   const upName = document.getElementById("upName");
   const upShortcut = document.getElementById("upShortcut");
 
-  /** @type {{ id: string, label: string, shortcut: string, mimeType: string|null, blob: Blob|null, duration: number, color: number }[]} */
+  /** @type {{ id: string, label: string, shortcut: string, mimeType: string|null, blob: Blob|null, duration: number, color: number, storagePath?: string|null, sortOrder?: number }[]} */
   let pads = [];
   let shortcutsEnabled = true;
   let audioCtx = null;
@@ -119,6 +128,7 @@
         blob: pad.blob,
         duration: pad.duration || 0,
         color: pad.color,
+        storagePath: pad.storagePath || null,
         order: pads.findIndex((p) => p.id === pad.id),
       });
       tx.oncomplete = () => resolve();
@@ -183,7 +193,107 @@
       blob: null,
       duration: 0,
       color: (index % 8) + 1,
+      storagePath: null,
+      sortOrder: index,
     };
+  }
+
+  function padSortOrder(pad) {
+    const idx = pads.findIndex((p) => p.id === pad.id);
+    return typeof pad.sortOrder === "number" ? pad.sortOrder : (idx >= 0 ? idx : 0);
+  }
+
+  function updateAuthUi() {
+    const cloud = Cloud();
+    const configured = Boolean(cloud?.isConfigured());
+    cloudMode = configured;
+    if (cloudBadge) {
+      cloudBadge.textContent = configured ? "· team cloud" : "· local";
+      cloudBadge.classList.toggle("is-cloud", configured);
+    }
+    if (authStatus) authStatus.hidden = true;
+    if (authBtn) authBtn.hidden = true;
+  }
+
+  async function requireAuth() {
+    return true;
+  }
+
+  async function cloudPublish(pad, { uploadAudio = false } = {}) {
+    const cloud = Cloud();
+    if (!cloud?.isConfigured()) return;
+    suppressRealtime = true;
+    try {
+      await cloud.publishPad(pad, padSortOrder(pad), { uploadAudio });
+    } finally {
+      setTimeout(() => {
+        suppressRealtime = false;
+      }, 500);
+    }
+  }
+
+  async function cloudPublishMeta(pad) {
+    const cloud = Cloud();
+    if (!cloud?.isConfigured()) return;
+    suppressRealtime = true;
+    try {
+      await cloud.publishPadMeta(pad, padSortOrder(pad));
+    } finally {
+      setTimeout(() => {
+        suppressRealtime = false;
+      }, 500);
+    }
+  }
+
+  async function applyCloudPads(cloudPads) {
+    bufferCache.clear();
+    await dbClearPads();
+    pads = cloudPads.map((p, i) => ({
+      ...p,
+      sortOrder: p.sortOrder ?? i,
+      storagePath: p.storagePath || null,
+    }));
+    for (const pad of pads) {
+      if (pad.blob) {
+        try {
+          await decodePad(pad);
+        } catch { /* leave */ }
+      }
+      await dbPutPad(pad);
+    }
+    renderBoard();
+  }
+
+  async function reloadFromCloud({ quiet = false } = {}) {
+    const cloud = Cloud();
+    if (!cloud?.isConfigured()) return false;
+    try {
+      let cloudPads = await cloud.loadBoard();
+      if (!cloudPads) return false;
+      if (!cloudPads.length) {
+        cloudPads = await cloud.loadBoard();
+      }
+      if (cloudPads && cloudPads.length) {
+        await applyCloudPads(cloudPads);
+        if (!quiet) toast("Loaded team board");
+        return true;
+      }
+      // Still empty after seed — create defaults and publish
+      pads = Array.from({ length: DEFAULT_PAD_COUNT }, (_, i) => createEmptyPad(i));
+      for (let i = 0; i < pads.length; i++) {
+        pads[i].id = "pad_" + String(i + 1).padStart(2, "0");
+        pads[i].sortOrder = i;
+        await dbPutPad(pads[i]);
+        await cloud.publishPadMeta(pads[i], i);
+      }
+      renderBoard();
+      if (!quiet) toast("Created empty team board");
+      return true;
+    } catch (err) {
+      console.error(err);
+      if (!quiet) toast("Cloud load failed — using local board");
+      return false;
+    }
   }
 
   function getPad(id) {
@@ -361,6 +471,7 @@
         if (!btn) return;
         menu.classList.remove("open");
         const action = btn.dataset.action;
+        if (!(await requireAuth())) return;
         if (action === "rename") startRename(pad, el.querySelector(".label"));
         else if (action === "edit") openModal(pad.id);
         else if (action === "shortcut") promptShortcut(pad);
@@ -382,8 +493,9 @@
         menu.classList.add("open");
       });
 
-      el.querySelector(".label").addEventListener("dblclick", (e) => {
+      el.querySelector(".label").addEventListener("dblclick", async (e) => {
         e.stopPropagation();
+        if (!(await requireAuth())) return;
         startRename(pad, e.currentTarget);
       });
 
@@ -407,6 +519,7 @@
         toast("Please drop an audio file");
         return;
       }
+      if (!(await requireAuth())) return;
       await assignFileToPad(pad, file);
       toast("Sound uploaded");
     });
@@ -428,6 +541,12 @@
       if (next !== pad.label) {
         pad.label = next;
         await dbPutPad(pad);
+        try {
+          await cloudPublishMeta(pad);
+        } catch (err) {
+          console.error(err);
+          toast("Saved locally — cloud sync failed");
+        }
       }
     };
     labelEl.addEventListener("blur", finish, { once: true });
@@ -445,10 +564,27 @@
   }
 
   async function clearPad(pad) {
-    pad.blob = null;
-    pad.mimeType = null;
-    pad.duration = 0;
+    const cloud = Cloud();
     bufferCache.delete(pad.id);
+    if (cloud?.isConfigured()) {
+      try {
+        suppressRealtime = true;
+        await cloud.clearPadAudio(pad);
+      } catch (err) {
+        console.error(err);
+        toast("Cloud clear failed");
+        return;
+      } finally {
+        setTimeout(() => {
+          suppressRealtime = false;
+        }, 500);
+      }
+    } else {
+      pad.blob = null;
+      pad.mimeType = null;
+      pad.duration = 0;
+      pad.storagePath = null;
+    }
     await dbPutPad(pad);
     renderBoard();
   }
@@ -466,13 +602,20 @@
       return;
     }
     await dbPutPad(pad);
+    try {
+      await cloudPublish(pad, { uploadAudio: true });
+    } catch (err) {
+      console.error(err);
+      toast("Saved locally — cloud sync failed");
+    }
     renderBoard();
   }
 
   // ---------------------------------------------------------------------------
   // Modal
   // ---------------------------------------------------------------------------
-  function openModal(padId, tab) {
+  async function openModal(padId, tab) {
+    if (!(await requireAuth())) return;
     const pad = getPad(padId);
     if (!pad) return;
     editingPadId = padId;
@@ -543,11 +686,17 @@
   });
 
   newSoundBtn.addEventListener("click", async () => {
+    if (!(await requireAuth())) return;
     let pad = pads.find((p) => !p.blob);
     if (!pad) {
       pad = createEmptyPad(pads.length);
       pads.push(pad);
       await dbPutPad(pad);
+      try {
+        await cloudPublishMeta(pad);
+      } catch (err) {
+        console.error(err);
+      }
       renderBoard();
     }
     openModal(pad.id);
@@ -556,6 +705,7 @@
   modalSave.addEventListener("click", async () => {
     const pad = getPad(editingPadId);
     if (!pad || !pendingBlob) return;
+    if (!(await requireAuth())) return;
 
     const activeTab = document.querySelector(".tab.active")?.dataset.tab;
     const nameInput = activeTab === "upload" ? upName : recName;
@@ -568,6 +718,11 @@
       if (clash) {
         clash.shortcut = "";
         await dbPutPad(clash);
+        try {
+          await cloudPublishMeta(clash);
+        } catch (err) {
+          console.error(err);
+        }
       }
       pad.shortcut = key;
     }
@@ -581,9 +736,20 @@
       return;
     }
     await dbPutPad(pad);
-    closeModal();
-    renderBoard();
-    toast("Saved to board");
+    modalSave.disabled = true;
+    try {
+      await cloudPublish(pad, { uploadAudio: true });
+      closeModal();
+      renderBoard();
+      toast(Cloud()?.isConfigured() ? "Saved for the team" : "Saved to board");
+    } catch (err) {
+      console.error(err);
+      closeModal();
+      renderBoard();
+      toast("Saved locally — cloud sync failed");
+    } finally {
+      updateSaveEnabled();
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -844,6 +1010,11 @@
       if (e.key === "Backspace" || e.key === "Delete") {
         pad.shortcut = "";
         await dbPutPad(pad);
+        try {
+          await cloudPublishMeta(pad);
+        } catch (err) {
+          console.error(err);
+        }
         renderBoard();
         toast("Shortcut cleared");
         return cleanup();
@@ -854,10 +1025,20 @@
       if (clash) {
         clash.shortcut = "";
         await dbPutPad(clash);
+        try {
+          await cloudPublishMeta(clash);
+        } catch (err) {
+          console.error(err);
+        }
       }
       pad.shortcut = key;
       keyEl.textContent = key.toUpperCase();
       await dbPutPad(pad);
+      try {
+        await cloudPublishMeta(pad);
+      } catch (err) {
+        console.error(err);
+      }
       renderBoard();
       toast("Shortcut: " + key.toUpperCase());
       cleanup();
@@ -898,7 +1079,7 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Export / Import
+  // Shared board (board.json in the repo — available to every visitor)
   // ---------------------------------------------------------------------------
   function blobToBase64(blob) {
     return new Promise((resolve, reject) => {
@@ -916,6 +1097,138 @@
     return new Blob([bytes], { type: mimeType || "application/octet-stream" });
   }
 
+  function guessMimeFromPath(path) {
+    const ext = (path.split(".").pop() || "").toLowerCase();
+    const map = {
+      mp3: "audio/mpeg",
+      wav: "audio/wav",
+      ogg: "audio/ogg",
+      m4a: "audio/mp4",
+      webm: "audio/webm",
+      aac: "audio/aac",
+    };
+    return map[ext] || "audio/mpeg";
+  }
+
+  async function fetchSharedBoard() {
+    try {
+      const res = await fetch(`${SHARED_BOARD_URL}?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.pads)) return null;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function sharedBoardHasAudio(data) {
+    return data.pads.some((p) => p && (p.audioBase64 || p.file));
+  }
+
+  async function loadAudioForPad(raw) {
+    if (raw.audioBase64) {
+      const mime = raw.mimeType || "audio/webm";
+      return { blob: base64ToBlob(raw.audioBase64, mime), mimeType: mime };
+    }
+    if (raw.file) {
+      const url = raw.file.replace(/^\//, "");
+      const res = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) throw new Error("Missing " + url);
+      const blob = await res.blob();
+      const mime = raw.mimeType || blob.type || guessMimeFromPath(url);
+      return { blob, mimeType: mime };
+    }
+    return { blob: null, mimeType: null };
+  }
+
+  /** Replace in-memory + IndexedDB board from a board.json-shaped payload */
+  async function applyBoardData(data, { markShared = false } = {}) {
+    bufferCache.clear();
+    await dbClearPads();
+    pads = [];
+
+    for (let i = 0; i < data.pads.length; i++) {
+      const raw = data.pads[i];
+      const pad = {
+        id: raw.id || newPadId(),
+        label: raw.label || `Pad ${i + 1}`,
+        shortcut: raw.shortcut || DEFAULT_SHORTCUTS[i] || "",
+        mimeType: null,
+        blob: null,
+        duration: raw.duration || 0,
+        color: raw.color || (i % 8) + 1,
+        storagePath: null,
+        sortOrder: i,
+      };
+      try {
+        const audio = await loadAudioForPad(raw);
+        pad.blob = audio.blob;
+        pad.mimeType = audio.mimeType;
+        if (pad.blob) await decodePad(pad);
+      } catch (err) {
+        console.warn("Pad audio failed", pad.label, err);
+      }
+      pads.push(pad);
+      await dbPutPad(pad);
+    }
+
+    if (markShared) {
+      await dbSaveMeta("sharedUpdatedAt", data.updatedAt || data.exportedAt || "");
+    }
+    renderBoard();
+  }
+
+  async function loadFromLocalStore(stored) {
+    stored.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    pads = stored.map((row, i) => ({
+      id: row.id,
+      label: row.label,
+      shortcut: row.shortcut || "",
+      mimeType: row.mimeType || null,
+      blob: row.blob || null,
+      duration: row.duration || 0,
+      color: row.color || (i % 8) + 1,
+      storagePath: row.storagePath || null,
+      sortOrder: row.order ?? i,
+    }));
+    for (const pad of pads) {
+      if (pad.blob) {
+        try {
+          await decodePad(pad);
+        } catch { /* leave */ }
+      }
+    }
+    renderBoard();
+  }
+
+  syncBtn.addEventListener("click", async () => {
+    if (!confirm("Reload the shared board? Unsynced local-only changes will be replaced.")) return;
+    syncBtn.disabled = true;
+    try {
+      if (Cloud()?.isConfigured()) {
+        const ok = await reloadFromCloud();
+        if (!ok) toast("Could not load team board");
+        return;
+      }
+      const remote = await fetchSharedBoard();
+      if (!remote) {
+        toast("No board.json on this site");
+        return;
+      }
+      await applyBoardData(remote, { markShared: true });
+      toast("Synced from site");
+    } catch (err) {
+      console.error(err);
+      toast("Sync failed");
+    } finally {
+      syncBtn.disabled = false;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Export / Import
+  // ---------------------------------------------------------------------------
   exportBtn.addEventListener("click", async () => {
     try {
       const exported = [];
@@ -927,18 +1240,25 @@
           mimeType: pad.mimeType,
           duration: pad.duration,
           color: pad.color,
+          file: null,
           audioBase64: pad.blob ? await blobToBase64(pad.blob) : null,
         });
       }
-      const payload = { version: 1, exportedAt: new Date().toISOString(), pads: exported };
+      // Same shape as repo board.json — commit this file as board.json to share with everyone
+      const payload = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        exportedAt: new Date().toISOString(),
+        pads: exported,
+      };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `soundboard-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = "board.json";
       a.click();
       URL.revokeObjectURL(url);
-      toast("Board exported");
+      toast("Saved board.json — commit it to the repo to share");
     } catch (err) {
       console.error(err);
       toast("Export failed");
@@ -953,6 +1273,7 @@
   importInput.addEventListener("change", async () => {
     const file = importInput.files?.[0];
     if (!file) return;
+    if (!(await requireAuth())) return;
     try {
       const data = JSON.parse(await file.text());
       if (!data?.pads || !Array.isArray(data.pads)) {
@@ -960,34 +1281,24 @@
         return;
       }
       if (!confirm(`Import ${data.pads.length} pads? This replaces your current board.`)) return;
-
-      bufferCache.clear();
-      await dbClearPads();
-      pads = [];
-
-      for (let i = 0; i < data.pads.length; i++) {
-        const raw = data.pads[i];
-        const pad = {
-          id: raw.id || newPadId(),
-          label: raw.label || `Pad ${i + 1}`,
-          shortcut: raw.shortcut || "",
-          mimeType: raw.mimeType || null,
-          blob: null,
-          duration: raw.duration || 0,
-          color: raw.color || (i % 8) + 1,
-        };
-        if (raw.audioBase64) {
-          pad.blob = base64ToBlob(raw.audioBase64, raw.mimeType || "audio/webm");
-          pad.mimeType = raw.mimeType || pad.blob.type;
+      await applyBoardData(data, { markShared: false });
+      // Push imported pads to cloud when signed in
+      const cloud = Cloud();
+      if (cloud?.isConfigured()) {
+        toast("Uploading import to team cloud…");
+        for (let i = 0; i < pads.length; i++) {
+          const pad = pads[i];
+          pad.sortOrder = i;
           try {
-            await decodePad(pad);
-          } catch { /* skip */ }
+            await cloud.publishPad(pad, i, { uploadAudio: Boolean(pad.blob) });
+          } catch (err) {
+            console.error("Import pad failed", pad.id, err);
+          }
         }
-        pads.push(pad);
-        await dbPutPad(pad);
+        toast("Imported to team board");
+      } else {
+        toast("Board imported locally");
       }
-      renderBoard();
-      toast("Board imported");
     } catch (err) {
       console.error(err);
       toast("Import failed");
@@ -1006,37 +1317,49 @@
     document.addEventListener("pointerdown", unlock);
     document.addEventListener("keydown", unlock);
 
-    const stored = await dbGetAllPads();
     const shortcutsMeta = await dbGetMeta("shortcutsEnabled");
     if (typeof shortcutsMeta === "boolean") {
       shortcutsEnabled = shortcutsMeta;
       kbdToggle.classList.toggle("on", shortcutsEnabled);
     }
 
-    if (!stored.length) {
-      pads = Array.from({ length: DEFAULT_PAD_COUNT }, (_, i) => createEmptyPad(i));
-      for (const pad of pads) await dbPutPad(pad);
-    } else {
-      stored.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      pads = stored.map((row, i) => ({
-        id: row.id,
-        label: row.label,
-        shortcut: row.shortcut || "",
-        mimeType: row.mimeType || null,
-        blob: row.blob || null,
-        duration: row.duration || 0,
-        color: row.color || (i % 8) + 1,
-      }));
-      for (const pad of pads) {
-        if (pad.blob) {
-          try {
-            await decodePad(pad);
-          } catch { /* leave */ }
-        }
+    const cloud = Cloud();
+    if (cloud?.isConfigured()) {
+      await cloud.initAuth(() => updateAuthUi());
+      updateAuthUi();
+      const loaded = await reloadFromCloud({ quiet: true });
+      if (!loaded) {
+        // Fall back to local / board.json while cloud is empty or unreachable
+        await initLocalFallback();
       }
+      cloud.subscribePads(async () => {
+        if (suppressRealtime) return;
+        await reloadFromCloud({ quiet: true });
+      });
+      return;
     }
 
-    renderBoard();
+    updateAuthUi();
+    await initLocalFallback();
+  }
+
+  async function initLocalFallback() {
+    const stored = await dbGetAllPads();
+    const remote = await fetchSharedBoard();
+    const knownSharedAt = await dbGetMeta("sharedUpdatedAt");
+    const remoteAt = remote ? (remote.updatedAt || remote.exportedAt || "") : "";
+
+    if (remote && sharedBoardHasAudio(remote) && (!stored.length || remoteAt !== knownSharedAt)) {
+      await applyBoardData(remote, { markShared: true });
+    } else if (stored.length) {
+      await loadFromLocalStore(stored);
+    } else if (remote) {
+      await applyBoardData(remote, { markShared: true });
+    } else {
+      pads = Array.from({ length: DEFAULT_PAD_COUNT }, (_, i) => createEmptyPad(i));
+      for (const pad of pads) await dbPutPad(pad);
+      renderBoard();
+    }
   }
 
   init().catch((err) => {

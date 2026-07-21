@@ -1,52 +1,69 @@
-# Board — Soundboard
+# Board — Team Soundboard
 
-A lightweight, offline-first soundboard inspired by the TV Total **Nippelboard**. UI based on the **Sound Spark** design: colorful pads, record/upload modal, keyboard shortcuts, export/import.
+A lightweight soundboard (TV Total / Nippelboard style) with the **Sound Spark** UI.  
+Hosts on **GitHub Pages**; the shared team board lives in **Supabase**.
 
-Plain HTML, CSS, and vanilla JavaScript — no build step, no frameworks.
+**Open access:** anyone with the link can play **and** upload — no sign-up / login.
+
+Plain HTML/CSS/JS — no build step.
 
 ## Features
 
-- **12 pads by default** (grows when you add more via **New sound**)
-- **Record** from the mic (max ~10s) with live level meter and preview before save
-- **Upload** MP3/WAV via the modal dropzone, or drag a file onto any pad
-- **Instant overlapping playback** via the Web Audio API
-- **Editable labels** — double-click a name, or use the ⋯ menu → Rename
-- **Clear / replace** from the pad menu or right-click
-- **Keyboard shortcuts** — default `Q–I` / `A–F`; customize per pad
-- **IndexedDB** persistence (survives reload)
-- **Export / Import** a single `.json` board (base64 audio)
+- Grid of pads, record (mic, ~10s) or upload MP3/WAV
+- Instant overlapping playback (Web Audio API)
+- Keyboard shortcuts
+- **Team cloud (Supabase):** shared pads + audio for everyone with the link
+- Local IndexedDB cache + optional `board.json` fallback
+- Export / Import backup
+
+## Quick start (team cloud)
+
+### 1. Create a Supabase project
+
+1. Open [supabase.com](https://supabase.com) → new project.
+2. SQL Editor → run [`supabase/schema.sql`](supabase/schema.sql).  
+   If you already ran an older auth-only schema, run [`supabase/open-access.sql`](supabase/open-access.sql) instead/as well.
+3. **Project Settings → API** → copy Project URL + `anon` `public` key into [`config.js`](config.js).
+
+No Auth users needed.
+
+### 2. Configure
+
+```js
+window.SOUNDBOARD_CONFIG = {
+  SUPABASE_URL: "https://xxxx.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOi...",
+};
+```
+
+The anon key is public in the frontend by design. With open RLS, **anyone who has the site URL can change the board** — fine for a private team link, not for a fully public internet dump of secrets you’d regret.
+
+### 3. Run / deploy
+
+- Local: open `index.html`, or `python3 -m http.server 8080` (mic often needs localhost).
+- GitHub Pages: push `main`.
+
+### 4. Team workflow
+
+1. Open the site → board loads from Supabase.
+2. Record / upload / rename / clear → saved for everyone.
+3. Others (also Incognito) see it after **Sync** or a short realtime refresh.
 
 ## How to use
 
 | Action | How |
 | --- | --- |
-| Play | Click a filled pad, or press its shortcut |
-| Add / record | Click an empty pad or **New sound** → Record → tap the red button → preview → **Save to board** |
-| Upload | Modal → **Upload** tab, or drag a file onto a pad |
-| Rename | Double-click the label, or ⋯ → Rename |
-| Shortcut | ⋯ → Reassign shortcut, or set it in the modal |
+| Play | Click a filled pad or press its shortcut |
+| Add / record | Empty pad or **New sound** → Record → save |
+| Upload | Modal **Upload** tab, or drag a file onto a pad |
+| Rename | Double-click label or ⋯ → Rename |
 | Clear | ⋯ → Clear sound |
-| Export / Import | Top bar buttons |
+| Sync | Reload board from Supabase |
+| Export / Import | Backup JSON (Import also pushes to cloud when configured) |
 
-## Run locally
+## Without Supabase
 
-Open `index.html` in a browser.
-
-Recording needs a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts). If the mic is blocked on `file://`, serve locally:
-
-```bash
-python3 -m http.server 8080
-```
-
-Then open [http://localhost:8080](http://localhost:8080).
-
-## Deploy on GitHub Pages
-
-1. Push this folder to a GitHub repo (`main` branch).
-2. **Settings → Pages → Deploy from a branch → `main` / root**.
-3. Live at `https://<user>.github.io/<repo>/`.
-
-Boards live in each visitor’s browser (IndexedDB). Use **Export** to back up or share.
+Leave `config.js` empty. Falls back to local IndexedDB and optional [`board.json`](board.json) / [`sounds/`](sounds/).
 
 ## Project structure
 
@@ -54,6 +71,12 @@ Boards live in each visitor’s browser (IndexedDB). Use **Export** to back up o
   index.html
   style.css
   app.js
-  favicon.ico
+  config.js
+  config.example.js
+  supabase-sync.js
+  supabase/schema.sql       # full setup (open access)
+  supabase/open-access.sql  # migrate from auth-only policies
+  board.json
+  sounds/
   README.md
 ```

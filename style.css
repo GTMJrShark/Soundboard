@@ -213,29 +213,25 @@
   }
 
   /* Playing state */
-  @keyframes padPulse {
-    0%   { box-shadow: 0 0 0 0 var(--glow), 0 8px 24px rgba(0,0,0,.35); }
-    70%  { box-shadow: 0 0 0 14px transparent, 0 14px 34px color-mix(in oklab, var(--c) 30%, transparent); }
-    100% { box-shadow: 0 0 0 0 transparent, 0 8px 24px rgba(0,0,0,.35); }
-  }
   @keyframes waveBounce {
-    0%,100% { transform: scaleY(.4); }
+    0%,100% { transform: scaleY(.35); }
     50%     { transform: scaleY(1); }
   }
   .pad.playing {
     border-color: color-mix(in oklab, var(--c) 85%, transparent);
     background:
       linear-gradient(160deg, color-mix(in oklab, var(--c) 55%, #14141c) 0%, color-mix(in oklab, var(--c) 15%, #14141c) 100%);
-    animation: padPulse 1.2s ease-out infinite;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 45%, transparent), 0 14px 34px color-mix(in oklab, var(--c) 28%, transparent);
+    transform: scale(0.98);
   }
   .pad.playing .wave span {
     opacity: 1;
     transform-origin: bottom;
-    animation: waveBounce 0.7s ease-in-out infinite;
+    animation: waveBounce 0.55s ease-in-out infinite;
   }
-  .pad.playing .wave span:nth-child(2n) { animation-delay: .1s; }
-  .pad.playing .wave span:nth-child(3n) { animation-delay: .2s; }
-  .pad.playing .wave span:nth-child(4n) { animation-delay: .3s; }
+  .pad.playing .wave span:nth-child(2n) { animation-delay: .08s; }
+  .pad.playing .wave span:nth-child(3n) { animation-delay: .16s; }
+  .pad.playing .wave span:nth-child(4n) { animation-delay: .24s; }
   .pad.playing .icon-bubble {
     background: color-mix(in oklab, var(--c) 45%, #000 10%);
     color: #fff;

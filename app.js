@@ -64,15 +64,9 @@
   let audioCtx = null;
   /** @type {Map<string, AudioBuffer>} */
   const bufferCache = new Map();
-  /**
-   * Active voices per pad. Retrigger stops every voice for that pad
-   * (gain kill + source.stop) so clips never stack.
-   * @type {Map<string, { source: AudioBufferSourceNode, gain: GainNode }[]>}
-   */
-  const activeVoices = new Map();
-  /** Generation token so in-flight decode can't start a stale layered play */
-  /** @type {Map<string, number>} */
-  const playGeneration = new Map();
+  /** Single active voice — one sound at a time */
+  let currentVoice = null; // { padId, source, gain, token }
+  let playToken = 0;
 
   /** Pad currently being edited in the modal */
   let editingPadId = null;
@@ -373,56 +367,67 @@
     pad.duration = buffer.duration;
   }
 
-  function clearPlayingVisual(padId) {
-    const el = boardEl.querySelector(`[data-pad-id="${padId}"]`);
-    if (!el) return;
-    el.classList.remove("playing");
-    clearTimeout(el._playT);
+  function clearAllPlayingVisuals() {
+    boardEl.querySelectorAll(".pad.playing").forEach((el) => {
+      el.classList.remove("playing");
+      clearTimeout(el._playT);
+    });
   }
 
-  function stopPadVoices(padId) {
-    const voices = activeVoices.get(padId);
-    if (!voices || !voices.length) {
-      clearPlayingVisual(padId);
-      return;
-    }
-    const ctx = audioCtx;
-    for (const voice of voices) {
-      try {
-        voice.source.onended = null;
-      } catch { /* ignore */ }
-      // Mute instantly (more reliable than stop alone across browsers)
-      try {
-        if (ctx) {
-          voice.gain.gain.cancelScheduledValues(ctx.currentTime);
-          voice.gain.gain.setValueAtTime(0, ctx.currentTime);
-        } else {
-          voice.gain.gain.value = 0;
-        }
-      } catch { /* ignore */ }
-      try {
-        voice.source.stop();
-      } catch { /* already stopped */ }
-      try {
-        voice.source.disconnect();
-        voice.gain.disconnect();
-      } catch { /* ignore */ }
-    }
-    activeVoices.delete(padId);
-    clearPlayingVisual(padId);
+  function setPlayingVisual(padId) {
+    clearAllPlayingVisuals();
+    const el = boardEl.querySelector(`[data-pad-id="${padId}"]`);
+    if (!el) return;
+    // Force CSS animation restart
+    el.classList.remove("playing");
+    void el.offsetWidth;
+    el.classList.add("playing");
   }
 
   function stopAllPlayback() {
-    for (const id of [...activeVoices.keys()]) stopPadVoices(id);
+    const voice = currentVoice;
+    currentVoice = null;
+    clearAllPlayingVisuals();
+    if (!voice) return;
+    try {
+      voice.source.onended = null;
+    } catch { /* ignore */ }
+    try {
+      voice.gain.gain.value = 0;
+    } catch { /* ignore */ }
+    try {
+      voice.source.stop();
+    } catch { /* ignore */ }
+    try {
+      voice.source.disconnect();
+      voice.gain.disconnect();
+    } catch { /* ignore */ }
   }
 
-  function startPadVoice(pad, buffer, generation) {
-    if (playGeneration.get(pad.id) !== generation) return;
+  async function playPad(pad) {
+    if (!pad || !pad.blob) return;
+
+    const token = ++playToken;
+    stopAllPlayback();
 
     const ctx = ensureAudioCtx();
-    // Only one clip at a time: cut every pad, then start this one
-    stopAllPlayback();
-    if (playGeneration.get(pad.id) !== generation) return;
+    try {
+      if (ctx.state === "suspended") await ctx.resume();
+    } catch { /* ignore */ }
+    if (token !== playToken) return;
+
+    let buffer = bufferCache.get(pad.id);
+    if (!buffer) {
+      try {
+        await decodePad(pad);
+      } catch {
+        if (token === playToken) toast("Could not play this sound");
+        return;
+      }
+      buffer = bufferCache.get(pad.id);
+      if (!buffer) return;
+    }
+    if (token !== playToken) return;
 
     const gain = ctx.createGain();
     gain.gain.value = 1;
@@ -432,67 +437,25 @@
     source.buffer = buffer;
     source.connect(gain);
 
-    const voice = { source, gain };
-    const list = activeVoices.get(pad.id) || [];
-    list.push(voice);
-    activeVoices.set(pad.id, list);
+    const voice = { padId: pad.id, source, gain, token };
+    currentVoice = voice;
 
     source.onended = () => {
-      const current = activeVoices.get(pad.id);
-      if (!current) return;
-      const next = current.filter((v) => v !== voice);
-      if (next.length) activeVoices.set(pad.id, next);
-      else {
-        activeVoices.delete(pad.id);
-        clearPlayingVisual(pad.id);
+      if (currentVoice && currentVoice.token === token) {
+        currentVoice = null;
+        clearAllPlayingVisuals();
       }
-      try {
-        source.disconnect();
-        gain.disconnect();
-      } catch { /* ignore */ }
     };
 
-    source.start(0);
-
-    const el = boardEl.querySelector(`[data-pad-id="${pad.id}"]`);
-    if (el) {
-      el.classList.remove("playing");
-      void el.offsetWidth;
-      el.classList.add("playing");
-      clearTimeout(el._playT);
-      const ms = Math.max(120, (pad.duration || buffer.duration || 1) * 1000 + 50);
-      el._playT = setTimeout(() => {
-        if (playGeneration.get(pad.id) === generation) el.classList.remove("playing");
-      }, ms);
-    }
-  }
-
-  function playPad(pad) {
-    if (!pad || !pad.blob) return;
-
-    const generation = (playGeneration.get(pad.id) || 0) + 1;
-    playGeneration.set(pad.id, generation);
-
-    // Cut current sound immediately (same pad restart OR switch to another pad)
-    stopAllPlayback();
-
-    const cached = bufferCache.get(pad.id);
-    if (cached) {
-      startPadVoice(pad, cached, generation);
+    try {
+      source.start(0);
+    } catch (err) {
+      console.error(err);
+      currentVoice = null;
       return;
     }
 
-    decodePad(pad)
-      .then(() => {
-        const buffer = bufferCache.get(pad.id);
-        if (!buffer) return;
-        startPadVoice(pad, buffer, generation);
-      })
-      .catch(() => {
-        if (playGeneration.get(pad.id) === generation) {
-          toast("Could not play this sound");
-        }
-      });
+    setPlayingVisual(pad.id);
   }
 
   // ---------------------------------------------------------------------------

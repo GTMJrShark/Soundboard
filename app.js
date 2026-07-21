@@ -19,6 +19,7 @@
   const boardEl = document.getElementById("board");
   const boardCountEl = document.getElementById("boardCount");
   const kbdToggle = document.getElementById("kbdToggle");
+  const stopAllBtn = document.getElementById("stopAllBtn");
   const syncBtn = document.getElementById("syncBtn");
   const importBtn = document.getElementById("importBtn");
   const exportBtn = document.getElementById("exportBtn");
@@ -64,6 +65,9 @@
   let audioCtx = null;
   /** @type {Map<string, AudioBuffer>} */
   const bufferCache = new Map();
+  /** One live source per pad — retrigger stops the previous play */
+  /** @type {Map<string, AudioBufferSourceNode>} */
+  const activeSources = new Map();
 
   /** Pad currently being edited in the modal */
   let editingPadId = null;
@@ -366,6 +370,28 @@
     pad.duration = buffer.duration;
   }
 
+  function stopPadSource(padId) {
+    const prev = activeSources.get(padId);
+    if (!prev) return;
+    try {
+      prev.onended = null;
+      prev.stop(0);
+    } catch { /* already stopped */ }
+    try {
+      prev.disconnect();
+    } catch { /* ignore */ }
+    activeSources.delete(padId);
+    const el = boardEl.querySelector(`[data-pad-id="${padId}"]`);
+    if (el) {
+      el.classList.remove("playing");
+      clearTimeout(el._playT);
+    }
+  }
+
+  function stopAllPlayback() {
+    for (const id of [...activeSources.keys()]) stopPadSource(id);
+  }
+
   function playPad(pad) {
     if (!pad || !pad.blob) return;
     const ctx = ensureAudioCtx();
@@ -376,9 +402,24 @@
         .catch(() => toast("Could not play this sound"));
       return;
     }
+
+    // Second press (or rapid re-trigger): restart instead of stacking
+    stopPadSource(pad.id);
+
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
+    source.onended = () => {
+      if (activeSources.get(pad.id) === source) {
+        activeSources.delete(pad.id);
+        const el = boardEl.querySelector(`[data-pad-id="${pad.id}"]`);
+        if (el) {
+          el.classList.remove("playing");
+          clearTimeout(el._playT);
+        }
+      }
+    };
+    activeSources.set(pad.id, source);
     source.start(0);
 
     const el = boardEl.querySelector(`[data-pad-id="${pad.id}"]`);
@@ -387,7 +428,10 @@
       void el.offsetWidth;
       el.classList.add("playing");
       clearTimeout(el._playT);
-      el._playT = setTimeout(() => el.classList.remove("playing"), Math.min(1600, (pad.duration || 1) * 1000 + 200));
+      const ms = Math.max(120, (pad.duration || buffer.duration || 1) * 1000 + 50);
+      el._playT = setTimeout(() => {
+        if (activeSources.get(pad.id) === source) el.classList.remove("playing");
+      }, ms);
     }
   }
 
@@ -1060,16 +1104,28 @@
     await dbSaveMeta("shortcutsEnabled", shortcutsEnabled);
   });
 
+  stopAllBtn.addEventListener("click", () => {
+    stopAllPlayback();
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && modal.classList.contains("open")) {
       closeModal();
       return;
     }
+    const tag = e.target?.tagName || "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+    if (!typing && !modal.classList.contains("open") && !document.querySelector(".prompt-overlay")) {
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        stopAllPlayback();
+        return;
+      }
+    }
     if (!shortcutsEnabled) return;
     if (modal.classList.contains("open")) return;
     if (document.querySelector(".prompt-overlay")) return;
-    const tag = e.target?.tagName || "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
+    if (typing) return;
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase();
     const pad = pads.find((p) => p.shortcut === key);
     if (pad?.blob) {

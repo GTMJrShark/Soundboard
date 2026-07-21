@@ -18,6 +18,10 @@
   <div class="top-actions">
     <span id="authStatus" class="auth-status" hidden></span>
     <button type="button" class="btn ghost" id="authBtn" hidden>Sign in</button>
+    <button type="button" class="btn ghost" id="stopAllBtn" title="Stop all playing sounds (Space)">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+      Stop
+    </button>
     <button type="button" class="toggle on" id="kbdToggle" title="Keyboard shortcuts">
       <span class="switch"></span>
       <span>Shortcuts</span>
@@ -45,7 +49,7 @@
   <div class="page-head">
     <div>
       <h1>My Board</h1>
-      <p><span id="boardCount" class="board-count">12 slots</span> · Click any pad to fire. Anyone with the link can upload for the team.</p>
+      <p><span id="boardCount" class="board-count">12 slots</span> · Click a pad to play (again = restart). <strong>Space</strong> or Stop cuts all sound.</p>
     </div>
     <div class="legend">
       <span class="lg-empty"><i></i>Empty</span>

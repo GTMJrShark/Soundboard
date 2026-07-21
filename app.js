@@ -20,6 +20,7 @@
   const boardCountEl = document.getElementById("boardCount");
   const kbdToggle = document.getElementById("kbdToggle");
   const stopAllBtn = document.getElementById("stopAllBtn");
+  const stopAllBtnBottom = document.getElementById("stopAllBtnBottom");
   const syncBtn = document.getElementById("syncBtn");
   const importBtn = document.getElementById("importBtn");
   const exportBtn = document.getElementById("exportBtn");
@@ -419,8 +420,8 @@
     if (playGeneration.get(pad.id) !== generation) return;
 
     const ctx = ensureAudioCtx();
-    // Kill anything still audible for this pad, then start fresh
-    stopPadVoices(pad.id);
+    // Only one clip at a time: cut every pad, then start this one
+    stopAllPlayback();
     if (playGeneration.get(pad.id) !== generation) return;
 
     const gain = ctx.createGain();
@@ -472,8 +473,8 @@
     const generation = (playGeneration.get(pad.id) || 0) + 1;
     playGeneration.set(pad.id, generation);
 
-    // Immediate cut on re-press (even while decode is still running)
-    stopPadVoices(pad.id);
+    // Cut current sound immediately (same pad restart OR switch to another pad)
+    stopAllPlayback();
 
     const cached = bufferCache.get(pad.id);
     if (cached) {
@@ -1163,9 +1164,12 @@
     await dbSaveMeta("shortcutsEnabled", shortcutsEnabled);
   });
 
-  stopAllBtn.addEventListener("click", () => {
-    stopAllPlayback();
-  });
+  function bindStopButton(btn) {
+    if (!btn) return;
+    btn.addEventListener("click", () => stopAllPlayback());
+  }
+  bindStopButton(stopAllBtn);
+  bindStopButton(stopAllBtnBottom);
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && modal.classList.contains("open")) {

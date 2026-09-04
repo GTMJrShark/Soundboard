@@ -1,0 +1,14 @@
+{
+  "name": "tanso-soundboard",
+  "private": true,
+  "scripts": {
+    "test": "node --test scripts/lib/*.test.js",
+    "sync": "node scripts/sync.js",
+    "sync:dry": "node scripts/sync.js --dry-run",
+    "sync:install": "node scripts/install-launchd.js",
+    "sync:uninstall": "node scripts/install-launchd.js --uninstall",
+    "sync:controller": "bash scripts/sync-from-controller.sh",
+    "streamdock:setup": "node scripts/install-streamdock-page.js",
+    "setup": "node scripts/setup.js"
+  }
+}

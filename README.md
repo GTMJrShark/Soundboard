@@ -61,6 +61,53 @@ The anon key is public in the frontend by design. With open RLS, **anyone who ha
 | Sync | Reload board from Supabase |
 | Export / Import | Backup JSON (Import also pushes to cloud when configured) |
 
+## Neuer Mac (Chefin / Team)
+
+Einmalig: [Stream Controller](https://www.hotspotek.com.cn/) installieren, [Node](https://nodejs.org/) (LTS), Git-Zugang zu diesem Repo. Dock anschließen, Stream Controller einmal öffnen.
+
+```bash
+git clone https://github.com/GTMJrShark/Soundboard.git ~/Soundboard
+cd ~/Soundboard
+npm run setup
+```
+
+Danach Stream Controller mit **Cmd+Q** beenden und neu öffnen, Seite **Soundboard**. Sync auf dem Dock holt später neue Pads.
+
+## Local Mac bridge (ohne Website)
+
+Die Sounds aus Supabase liegen 1:1 als Dateien in `sounds/`, benannt wie die Pads.
+`sounds/controller/` hat feste `pad_01.wav`–`pad_12.wav` für Hardware-Controller.
+
+```bash
+npm test          # Namens- und Spiegel-Logik
+npm run sync:dry  # zeigt, was passieren würde
+npm run sync      # lädt / benennt / löscht, schreibt board.json + Controller-WAVs
+npm run sync:install    # stündlicher launchd-Job (Log: ~/Library/Logs/soundboard-sync.log)
+npm run sync:uninstall
+```
+
+Der Job committet nichts. `sounds/controller/` und `.sync-state.json` sind gitignored.
+
+### Stream Controller (HotSpot Stream Dock)
+
+Die 12 Play-Tasten zeigen fest auf `sounds/controller/pad_01.wav`–`pad_12.wav`. Ein Sync überschreibt nur die WAVs — die Tasten bleiben.
+
+Einmal einrichten (hängt Seite **Soundboard** an das gerade aktive Dock-Profil, z. B. Touchbar):
+
+```bash
+npm run streamdock:setup
+```
+
+Stream Controller danach neu starten und auf Seite 2 wechseln.
+
+| Taste | Aktion |
+| --- | --- |
+| oben 4×3 | Play `pad_01`–`pad_12` |
+| untere Reihe links | **Sync** (holt Supabase → WAVs, macOS-Notification) |
+| daneben | Stop |
+
+Ohne Hardware: `npm run sync:controller` (gleiche Notification).
+
 ## Without Supabase
 
 Leave `config.js` empty. Falls back to local IndexedDB and optional [`board.json`](board.json) / [`sounds/`](sounds/).

@@ -2,7 +2,8 @@
   "name": "tanso-soundboard",
   "private": true,
   "scripts": {
-    "test": "node --test scripts/lib/*.test.js",
+    "test": "node --test scripts/**/*.test.js scripts/*.test.js",
+    "keepalive": "node scripts/keepalive.js",
     "sync": "node scripts/sync.js",
     "sync:dry": "node scripts/sync.js --dry-run",
     "sync:install": "node scripts/install-launchd.js",

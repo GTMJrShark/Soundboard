@@ -49,6 +49,8 @@ The anon key is public in the frontend by design. With open RLS, **anyone who ha
 2. Record / upload / rename / clear → saved for everyone.
 3. Others (also Incognito) see it after **Sync** or a short realtime refresh.
 
+Free Supabase projects pause after ~7 days without enough DB traffic. A GitHub Action (`Keep Supabase awake`) hits `pads` once a day so the project stays up. Actions → **Keep Supabase awake** → Run workflow tests it immediately. Optional repo secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY`; otherwise it reads `config.js`.
+
 ## How to use
 
 | Action | How |

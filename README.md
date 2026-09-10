@@ -104,9 +104,9 @@ Stream Controller danach neu starten und auf Seite 2 wechseln.
 
 | Taste | Aktion |
 | --- | --- |
-| oben 4×3 | Play `pad_01`–`pad_12` |
-| untere Reihe links | **Sync** (holt Supabase → WAVs, macOS-Notification) |
-| daneben | Stop |
+| 4×3 links (wie Website) | Play `pad_01`–`pad_12` |
+| rechts oben | **Sync** |
+| darunter | **Stop** |
 
 Ohne Hardware: `npm run sync:controller` (gleiche Notification).
 

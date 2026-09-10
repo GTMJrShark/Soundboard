@@ -33,3 +33,14 @@ test("fällt ohne Serial-Block auf DeviceConfig zurück", () => {
 test("Soundboard-Seite hat eine feste ID", () => {
   assert.match(SOUND_PAGE_ID, /\.sdProfile$/);
 });
+
+test("Pads liegen wie auf der Website: 4er-Reihen, Sync/Stop rechts", () => {
+  const { padKey, SYNC_KEY, STOP_KEY } = require("./streamdock-profile");
+  assert.equal(padKey(0), "0,0");
+  assert.equal(padKey(3), "3,0");
+  assert.equal(padKey(4), "0,1");
+  assert.equal(padKey(5), "1,1");
+  assert.equal(padKey(11), "3,2");
+  assert.equal(SYNC_KEY, "4,0");
+  assert.equal(STOP_KEY, "4,1");
+});

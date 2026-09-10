@@ -7,7 +7,7 @@ const path = require("path");
 const { controllerName } = require("./lib/names");
 const { padIcon, syncIcon } = require("./lib/pad-icon");
 const { playApp, stopApp } = require("./lib/play-app");
-const { parseDockConfig, SOUND_PAGE_ID } = require("./lib/streamdock-profile");
+const { parseDockConfig, SOUND_PAGE_ID, padKey, SYNC_KEY, STOP_KEY } = require("./lib/streamdock-profile");
 
 const ROOT = path.resolve(__dirname, "..");
 const SUPPORT = path.join(process.env.HOME, "Library/Application Support/HotSpot/StreamDock");
@@ -91,7 +91,7 @@ function buildActions(prev, pads, pageDir) {
   fs.mkdirSync(DOCK_AUDIO, { recursive: true });
   const actions = {};
   for (let i = 0; i < 12; i++) {
-    const key = Math.floor(i / 3) + "," + (i % 3);
+    const key = padKey(i);
     const pad = pads[i] || { id: "pad_" + String(i + 1).padStart(2, "0"), label: "Pad " + (i + 1), color: (i % 8) + 1 };
     const title = pad.file ? pad.label || pad.id : "";
     const imgs = writePadImages(imgDir, pad);
@@ -113,8 +113,8 @@ function buildActions(prev, pads, pageDir) {
   if (fs.existsSync(stopPlugin)) fs.copyFileSync(stopPlugin, path.join(imgDir, "stop.png"));
   else fs.writeFileSync(path.join(imgDir, "stop.png"), padIcon({ color: 7, playing: true }));
 
-  actions["4,0"] = {
-    ActionID: keepId(prev, "4,0", "5,0"),
+  actions[SYNC_KEY] = {
+    ActionID: keepId(prev, SYNC_KEY, "4,0", "5,0"),
     Controller: "Keypad",
     Name: "Open",
     Settings: { path: SYNC_APP },
@@ -122,8 +122,8 @@ function buildActions(prev, pads, pageDir) {
     States: [titled("sync.png", "Sync")],
     UUID: "com.hotspot.streamdock.system.open",
   };
-  actions["4,1"] = {
-    ActionID: keepId(prev, "5,1"),
+  actions[STOP_KEY] = {
+    ActionID: keepId(prev, STOP_KEY, "5,1"),
     Controller: "Keypad",
     Name: "Open",
     Settings: { path: stopApp(path.join(ROOT, "scripts/players/Stop.app")) },
